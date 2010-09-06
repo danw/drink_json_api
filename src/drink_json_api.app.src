@@ -1,0 +1,8 @@
+{application, drink_json_api,
+ [{description, "Drink JSON API"},
+  {vsn, "1.0"},
+  {modules, [drink_json_api]},
+  {registered,[]},
+  {applications, [kernel, stdlib, sasl]},
+  {start_phases, []}
+]}.
