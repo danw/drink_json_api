@@ -30,7 +30,7 @@
 -export ([format_time/1]).
 
 -export ([currentuser/1, drop/3, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
-          temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2]).
+          temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1]).
 
 -include_lib ("drink/include/user.hrl").
 -include_lib ("drink/include/drink_mnesia.hrl").
@@ -137,6 +137,8 @@ request(U, modmachine, A) ->
                            {admin_only, boolean}]);
 request(U, delmachine, A) ->
     api(U, delmachine, A, [{machine, atom}], require_admin);
+request(U, getconnections, A) ->
+    api(U, getconnections, A, []);
 request(_, _, _) ->
     error(unknown_command).
 
@@ -292,6 +294,13 @@ modmachine(_, MachineAtom, MachineName, MachinePassword, MachinePublicIP, Machin
 delmachine(_, Machine) ->
     case drink_machines_sup:del(Machine) of
         ok -> ok(true);
+        _ -> error(unknown_error)
+    end.
+
+getconnections(_) ->
+    case drink_connections:get() of
+        {ok, List} ->
+            ok(format_connections(List));
         _ -> error(unknown_error)
     end.
 
@@ -460,6 +469,15 @@ temperature_data(Machine, Data) ->
 
 format_temp(Temp = #temperature{}) ->
     {array, [format_time(Temp#temperature.time), Temp#temperature.temperature]}.
+
+format_connections(List) ->
+    {array, [ format_connection(X) || X <- List ]}.
+
+format_connection({Pid, Username, Transport, App}) ->
+    {struct, [{pid, pid_to_list(Pid)},
+              {username, Username},
+              {transport, atom_to_list(Transport)},
+              {app, atom_to_list(App)}]}.
 
 format_time(Time) ->
     calendar:datetime_to_gregorian_seconds(Time) -
