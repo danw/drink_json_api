@@ -333,12 +333,12 @@ getapps(_) ->
 delapp(U, Name) ->
     case {user_auth:can_admin(U), user_auth:user_info(U), drink_app_auth_api:app_get(Name)} of
         {true, _, _} ->
-            case drink_app_auth_api:add_delete(Name) of
+            case drink_app_auth_api:app_delete(Name) of
                 ok -> ok(true);
                 _ -> error(unknown_error)
             end;
         {_, {ok, #user{ username = UserName }}, {ok, #app{ owner = UserName }}} ->
-            case drink_app_auth_api:add_delete(Name) of
+            case drink_app_auth_api:app_delete(Name) of
                 ok -> ok(true);
                 _ -> error(unknown_error)
             end;
