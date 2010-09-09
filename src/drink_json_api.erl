@@ -31,7 +31,7 @@
 
 -export ([currentuser/1, drop/3, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
           temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1,
-          getapps/1]).
+          addapp/3, getapps/1, delapp/2]).
 
 -include_lib ("drink/include/user.hrl").
 -include_lib ("drink/include/drink_mnesia.hrl").
@@ -141,8 +141,13 @@ request(U, delmachine, A) ->
     api(U, delmachine, A, [{machine, atom}], require_admin);
 request(U, getconnections, A) ->
     api(U, getconnections, A, []);
+request(U, addapp, A) ->
+    api(U, addapp, A, [{name, atom},
+                       {description}]);
 request(U, getapps, A) ->
     api(U, getapps, A, []);
+request(U, delapp, A) ->
+    api(U, delapp, A, [{name, atom}]);
 request(_, _, _) ->
     error(unknown_command).
 
@@ -308,11 +313,37 @@ getconnections(_) ->
         _ -> error(unknown_error)
     end.
 
+addapp(U, Name, Description) ->
+    case user_auth:user_info(U) of
+        {ok, UserInfo} ->
+            case drink_app_auth_api:app_register(Name, UserInfo#user.username, Description, []) of
+                ok -> ok(true);
+                _ -> error(unknown_error)
+            end;
+        _ -> error(permission_denied)
+    end.
+
 getapps(_) ->
     case drink_app_auth_api:app_list() of
         {ok, List} ->
-            ok(format_apps(List));
+            ok(format_apps([ drink_app_auth_api:app_get(App) || App <- List ]));
         _ -> error(unknown_error)
+    end.
+
+delapp(U, Name) ->
+    case {user_auth:can_admin(U), user_auth:user_info(U), drink_app_auth_api:app_get(Name)} of
+        {true, _, _} ->
+            case drink_app_auth_api:add_delete(Name) of
+                ok -> ok(true);
+                _ -> error(unknown_error)
+            end;
+        {_, {ok, #user{ username = UserName }}, {ok, #app{ owner = UserName }}} ->
+            case drink_app_auth_api:add_delete(Name) of
+                ok -> ok(true);
+                _ -> error(unknown_error)
+            end;
+        _ ->
+            error(permission_denied)
     end.
 
 ok(Data) ->
@@ -493,10 +524,10 @@ format_connection({Pid, Username, Transport, App}) ->
 format_apps(List) ->
     {array, [ format_app(X) || X <- List ]}.
 
-format_app(App = #app{}) ->
-    {struct, [{name, atom_to_list(App#app.name)},
-              {owner, App#app.owner},
-              {description, App#app.description}]}.
+format_app({ok, AppInfo = #app{}}) ->
+    {struct, [{name, atom_to_list(AppInfo#app.name)},
+              {owner, AppInfo#app.owner},
+              {description, AppInfo#app.description}]}.
 
 format_time(Time) ->
     calendar:datetime_to_gregorian_seconds(Time) -
