@@ -27,7 +27,7 @@
 
 -export ([request/3]).
 -export ([machine_stat/2, slot_stat/1]).
--export ([format_time/1]).
+-export ([format_time/1, encode_event/3]).
 
 -export ([currentuser/1, drop/3, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
           temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1,
@@ -532,3 +532,80 @@ format_app({ok, AppInfo = #app{}}) ->
 format_time(Time) ->
     calendar:datetime_to_gregorian_seconds(Time) -
     calendar:datetime_to_gregorian_seconds({{1970,1,1}, {0,0,0}}).
+
+encode_event(UserRef, Provider, Event) ->
+    case encode_event_data(UserRef, Provider, Event) of
+        false ->
+            json:encode({struct, [{event, atom_to_list(element(1, Event))}]});
+        Data ->
+            json:encode({struct, [{event, atom_to_list(element(1, Event))},
+                                  {data, Data}]})
+    end.
+
+encode_event_data(UserRef, drink, MoneyLog = #money_log{}) ->
+    {struct, [{time, format_time(MoneyLog#money_log.time)},
+              {username, MoneyLog#money_log.username},
+              {admin, stringify(MoneyLog#money_log.admin)},
+              {amount, MoneyLog#money_log.amount},
+              {direction, atom_to_list(MoneyLog#money_log.direction)},
+              {reason, atom_to_list(MoneyLog#money_log.reason)}]};
+encode_event_data(UserRef, drink, {user_changed, Username, Changes}) ->
+    {struct, [{username, Username}] ++ encode_user_changes(Changes)};
+encode_event_data(UserRef, drink, {machine_added, Machine}) ->
+    % TODO: we already have the full machine object, no need to get the info again
+    machine_stat(user_auth:can_admin(UserRef), Machine#machine.machine);
+encode_event_data(UserRef, drink, {machine_modified, OldMachine, Machine}) ->
+    % TODO: we already have the full machine object, no need to get the info again
+    machine_stat(user_auth:can_admin(UserRef), Machine#machine.machine);
+encode_event_data(UserRef, drink, {machine_deleted, Machine}) ->
+    {struct, [{machineid, atom_to_list(Machine#machine.machine)}]};
+encode_event_data(UserRef, drink, {machine_connected, Machine}) ->
+    {struct, [{machineid, atom_to_list(Machine)}]};
+encode_event_data(UserRef, drink, {machine_disconnected, Machine}) ->
+    {struct, [{machineid, atom_to_list(Machine)}]};
+encode_event_data(UserRef, drink, {slot_added, Machine, Slot}) ->
+    {struct, [{machineid, atom_to_list(Machine#machine.machine)}, {slot, slot_stat(Slot)}]};
+encode_event_data(UserRef, drink, {slot_modified, Machine, Slot}) ->
+    {struct, [{machineid, atom_to_list(Machine#machine.machine)}, {slot, slot_stat(Slot)}]};
+encode_event_data(UserRef, drink, {slot_deleted, Machine, Slot}) ->
+    {struct, [{machineid, atom_to_list(Machine#machine.machine)}, {slot, Slot}]};
+encode_event_data(UserRef, drink, T = #temperature{}) ->
+    {struct, [{machine, atom_to_list(T#temperature.machine)},
+              {time, format_time(T#temperature.time)},
+              {temperature, T#temperature.temperature}]};
+encode_event_data(UserRef, drink, D = #drop_log{}) ->
+    {struct, [{machine, atom_to_list(D#drop_log.machine)},
+              {slot, D#drop_log.slot},
+              {time, format_time(D#drop_log.time)},
+              {status, atom_to_list(D#drop_log.status)},
+              {username, D#drop_log.username}]};
+encode_event_data(_, drink, _) ->
+    false;
+encode_event_data(_UserRef, drink_connections, {connected, Pid, Username, Transport, App}) ->
+    {struct, [{pid, pid_to_list(Pid)},
+              {username, Username},
+              {transport, atom_to_list(Transport)},
+              {app, atom_to_list(App)}]};
+encode_event_data(_UserRef, drink_connections, {disconnected, Pid}) ->
+    {struct, [{pid, pid_to_list(Pid)}]};
+encode_event_data(_, drink_connections, _) -> false;
+encode_event_data(_, drink_app_auth, {app_new, App}) ->
+    {struct, [{name, atom_to_list(App#app.name)},
+              {owner, App#app.owner},
+              {description, App#app.description}]};
+encode_event_data(_, drink_app_auth, {app_deleted, Name}) ->
+    {struct, [{name, atom_to_list(Name)}]};
+encode_event_data(_, _, _) -> false.
+
+encode_user_changes([]) -> [];
+encode_user_changes([{add_ibutton, IButton}|T]) ->
+    [{add_ibutton, IButton}] ++ encode_user_changes(T);
+encode_user_changes([{del_ibutton, IButton}|T]) ->
+    [{del_ibutton, IButton}] ++ encode_user_changes(T);
+encode_user_changes([{admin, Old, New}|T]) ->
+    [{admin, {struct, [{old, Old}, {new, New}]}}] ++ encode_user_changes(T);
+encode_user_changes([_|T]) ->
+    [] ++ encode_user_changes(T).
+
+stringify(L) when is_list(L) -> L;
+stringify(nil) -> "".
