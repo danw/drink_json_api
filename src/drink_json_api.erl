@@ -30,11 +30,13 @@
 -export ([format_time/1]).
 
 -export ([currentuser/1, drop/3, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
-          temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1]).
+          temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1,
+          getapps/1]).
 
 -include_lib ("drink/include/user.hrl").
 -include_lib ("drink/include/drink_mnesia.hrl").
 -include_lib ("drink_log/include/drink_log.hrl").
+-include_lib ("drink_app_auth/include/app_auth.hrl").
 
 arg(atom, V) when is_atom(V) -> {ok, V};
 arg(atom, V) when is_list(V) -> {ok, list_to_atom(V)};
@@ -139,6 +141,8 @@ request(U, delmachine, A) ->
     api(U, delmachine, A, [{machine, atom}], require_admin);
 request(U, getconnections, A) ->
     api(U, getconnections, A, []);
+request(U, getapps, A) ->
+    api(U, getapps, A, []);
 request(_, _, _) ->
     error(unknown_command).
 
@@ -304,6 +308,13 @@ getconnections(_) ->
         _ -> error(unknown_error)
     end.
 
+getapps(_) ->
+    case drink_app_auth_api:app_list() of
+        {ok, List} ->
+            ok(format_apps(List));
+        _ -> error(unknown_error)
+    end.
+
 ok(Data) ->
     {ok, Data}.
 
@@ -456,7 +467,7 @@ format_log(Line = #drop_log{}) ->
         {status, Line#drop_log.status}
     ]}.
 
-format_temps(Start, Length, Data) -> % TODO: don't hardcode bigdrink and littledrink
+format_temps(Start, Length, Data) ->
     {struct, [{start, Start}, {length, Length}, {machines, {struct, 
         [ temperature_data(M, Data) || M <- temperature_machines(Data) ]}}]}.
 
@@ -478,6 +489,14 @@ format_connection({Pid, Username, Transport, App}) ->
               {username, Username},
               {transport, atom_to_list(Transport)},
               {app, atom_to_list(App)}]}.
+
+format_apps(List) ->
+    {array, [ format_app(X) || X <- List ]}.
+
+format_app(App = #app{}) ->
+    {struct, [{name, atom_to_list(App#app.name)},
+              {owner, App#app.owner},
+              {description, App#app.description}]}.
 
 format_time(Time) ->
     calendar:datetime_to_gregorian_seconds(Time) -
