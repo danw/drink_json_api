@@ -359,8 +359,8 @@ dump_machines(false, [M|Machines]) ->
         {ok, true} -> dump_machines(false, Machines);
         _ -> [{M, machine_stat(false, M)}] ++ dump_machines(false, Machines)
     end;
-dump_machines(Admin, [M|Machines]) when is_boolean(Admin) ->
-    [{M, machine_stat(Admin, M)}] ++ dump_machines(Admin, Machines).
+dump_machines(true, [M|Machines]) ->
+    [{M, machine_stat(true, M)}] ++ dump_machines(true, Machines).
 
 machine_stat(false, Machine) ->
     case drink_machine:slots(Machine) of
