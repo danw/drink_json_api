@@ -171,7 +171,7 @@ currentuser(U) ->
 drop(U, Machine, Slot, 0) -> drop(U, Machine, Slot);
 drop(U, Machine, Slot, Delay) ->
 	receive
-	after Delay ->
+	after Delay * 1000 ->
 		drop(U, Machine, Slot)
 	end.
 drop(U, Machine, Slot) ->
