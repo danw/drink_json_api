@@ -29,7 +29,7 @@
 -export ([machine_stat/2, slot_stat/1]).
 -export ([format_time/1, encode_event/3]).
 
--export ([currentuser/1, drop/3, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
+-export ([currentuser/1, drop/4, logs/3, machines/1, moduser/5, addslot/7, setslot/7, delslot/3,
           temperatures/3, userinfo/2, addmachine/9, modmachine/9, delmachine/2, getconnections/1,
           addapp/3, getapps/1, delapp/2]).
 
@@ -86,7 +86,8 @@ request(U, currentuser, _) ->
     api(U, currentuser, nil, []);
 request(U, drop, A) ->
     api(U, drop, A, [{machine, atom},
-                     {slot, integer}]);
+                     {slot, integer},
+                     {delay, integer}]);
 request(U, logs, A) ->
     api(U, logs, A, [{offset, integer},
                      {limit, integer}]);
@@ -167,6 +168,12 @@ api(UserRef, Api, A, Args) ->
 currentuser(U) ->
     userref_to_struct(U).
 
+drop(U, Machine, Slot, 0) -> drop(U, Machine, Slot);
+drop(U, Machine, Slot, Delay) ->
+	receive
+	after Delay ->
+		drop(U, Machine, Slot)
+	end.
 drop(U, Machine, Slot) ->
     case user_auth:drop(U, Machine, Slot) of
         ok ->
